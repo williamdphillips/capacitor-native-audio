@@ -293,10 +293,21 @@ public class AudioManager {
             return duration.isNumeric ? CMTimeGetSeconds(duration) : 0.0
         }
 
-        // If not ready yet, return 0 instead of blocking with a semaphore
-        // The UI will update once the player is ready via notifications
-        print("Player item not ready yet, returning 0.0 for duration")
-        return 0.0
+        // Wait for the player item to become ready
+        let semaphore = DispatchSemaphore(value: 0)
+        var duration: Double = 0.0
+
+        let observer = currentItem.observe(\.status, options: [.new]) { item, _ in
+            if item.status == .readyToPlay {
+                let itemDuration = item.asset.duration
+                duration = itemDuration.isNumeric ? CMTimeGetSeconds(itemDuration) : 0.0
+                semaphore.signal()
+            }
+        }
+
+        semaphore.wait()  // Blocks the current thread
+        observer.invalidate()  // Clean up the observer
+        return duration
     }
 
     func getCurrentTime() -> Double {
@@ -310,10 +321,21 @@ public class AudioManager {
             return currentTime.isNumeric ? CMTimeGetSeconds(currentTime) : 0.0
         }
 
-        // If not ready yet, return 0 instead of blocking with a semaphore
-        // The UI will update once the player is ready via notifications
-        print("Player item not ready yet, returning 0.0 for current time")
-        return 0.0
+        // Wait for the player item to become ready
+        let semaphore = DispatchSemaphore(value: 0)
+        var time: Double = 0.0
+
+        let observer = currentItem.observe(\.status, options: [.new]) { item, _ in
+            if item.status == .readyToPlay {
+                let itemTime = self.audioPlayer.currentTime()
+                time = itemTime.isNumeric ? CMTimeGetSeconds(itemTime) : 0.0
+                semaphore.signal()
+            }
+        }
+
+        semaphore.wait()  // Blocks the current thread
+        observer.invalidate()  // Clean up the observer
+        return time
     }
 
     // MARK: - Metadata Updates
@@ -367,80 +389,59 @@ public class AudioManager {
     private func fetchArtwork(
         from source: String, completion: @escaping (MPMediaItemArtwork?) -> Void
     ) {
-        // Perform all artwork loading on a background queue to avoid blocking the main thread
-        DispatchQueue.global(qos: .userInitiated).async {
-            if source.starts(with: "data:image/") {
-                // Base64 Image Handling
-                guard let dataString = source.components(separatedBy: ",").last,
-                    let imageData = Data(base64Encoded: dataString),
-                    let image = UIImage(data: imageData)
-                else {
-                    print("Failed to decode base64 image data")
-                    DispatchQueue.main.async {
-                        completion(nil)
-                    }
+        if source.starts(with: "data:image/") {
+            // Base64 Image Handling
+            guard let dataString = source.components(separatedBy: ",").last,
+                let imageData = Data(base64Encoded: dataString),
+                let image = UIImage(data: imageData)
+            else {
+                print("Failed to decode base64 image data")
+                completion(nil)
+                return
+            }
+
+            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            completion(artwork)
+            print("Artwork loaded from base64 image data")
+        } else if source.starts(with: "file://") {
+            // Local File Path Handling
+            let fileURL = URL(fileURLWithPath: source.replacingOccurrences(of: "file://", with: ""))
+            do {
+                let imageData = try Data(contentsOf: fileURL)
+                if let image = UIImage(data: imageData) {
+                    let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                    completion(artwork)
+                    print("Artwork loaded from local file path")
+                    return
+                } else {
+                    print("Failed to create image from local file")
+                    completion(nil)
+                }
+            } catch {
+                print("Error loading local file: \(error)")
+                completion(nil)
+            }
+        } else if let url = URL(string: source) {
+            // URL-based Image Handling
+            URLSession.shared.dataTask(with: url) { data, _, error in
+                if let error = error {
+                    print("Error fetching artwork: \(error.localizedDescription)")
+                    completion(nil)
                     return
                 }
 
-                let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                DispatchQueue.main.async {
+                if let data = data, let image = UIImage(data: data) {
+                    let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
                     completion(artwork)
-                    print("Artwork loaded from base64 image data")
-                }
-            } else if source.starts(with: "file://") {
-                // Local File Path Handling
-                let fileURL = URL(fileURLWithPath: source.replacingOccurrences(of: "file://", with: ""))
-                do {
-                    let imageData = try Data(contentsOf: fileURL)
-                    if let image = UIImage(data: imageData) {
-                        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                        DispatchQueue.main.async {
-                            completion(artwork)
-                            print("Artwork loaded from local file path")
-                        }
-                        return
-                    } else {
-                        print("Failed to create image from local file")
-                        DispatchQueue.main.async {
-                            completion(nil)
-                        }
-                    }
-                } catch {
-                    print("Error loading local file: \(error)")
-                    DispatchQueue.main.async {
-                        completion(nil)
-                    }
-                }
-            } else if let url = URL(string: source) {
-                // URL-based Image Handling
-                URLSession.shared.dataTask(with: url) { data, _, error in
-                    if let error = error {
-                        print("Error fetching artwork: \(error.localizedDescription)")
-                        DispatchQueue.main.async {
-                            completion(nil)
-                        }
-                        return
-                    }
-
-                    if let data = data, let image = UIImage(data: data) {
-                        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                        DispatchQueue.main.async {
-                            completion(artwork)
-                            print("Artwork loaded from URL")
-                        }
-                    } else {
-                        print("Failed to create artwork from data")
-                        DispatchQueue.main.async {
-                            completion(nil)
-                        }
-                    }
-                }.resume()
-            } else {
-                print("Invalid artwork source")
-                DispatchQueue.main.async {
+                    print("Artwork loaded from URL")
+                } else {
+                    print("Failed to create artwork from data")
                     completion(nil)
                 }
-            }
+            }.resume()
+        } else {
+            print("Invalid artwork source")
+            completion(nil)
         }
     }
 
