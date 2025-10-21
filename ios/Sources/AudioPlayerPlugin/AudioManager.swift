@@ -71,6 +71,44 @@ public class AudioManager {
         return audioSources
     }
 
+    func removeAudioSource(withId audioId: String) throws {
+        guard let index = audioSources.firstIndex(where: { $0.audioId == audioId }) else {
+            throw AudioPlayerError.runtimeError("Audio source with ID \(audioId) not found")
+        }
+        
+        // Don't allow removing the currently playing song
+        if currentIndex == index {
+            throw AudioPlayerError.runtimeError("Cannot remove currently playing audio source")
+        }
+        
+        // Adjust currentIndex if necessary
+        if index < currentIndex {
+            currentIndex -= 1
+        }
+        
+        audioSources.remove(at: index)
+        print("Removed audio source: \(audioId)")
+    }
+
+    func removeAudioSources(withIds audioIds: [String]) throws {
+        for audioId in audioIds {
+            // Skip if it's the currently playing song
+            if let currentSource = getCurrentAudioSource(), currentSource.audioId == audioId {
+                print("Skipping removal of currently playing audio source: \(audioId)")
+                continue
+            }
+            
+            if let index = audioSources.firstIndex(where: { $0.audioId == audioId }) {
+                // Adjust currentIndex if necessary
+                if index < currentIndex {
+                    currentIndex -= 1
+                }
+                audioSources.remove(at: index)
+                print("Removed audio source: \(audioId)")
+            }
+        }
+    }
+
     // MARK: - Playback Controls
 
     private var playerItemStatusObserver: NSKeyValueObservation?

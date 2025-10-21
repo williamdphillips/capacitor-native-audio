@@ -164,6 +164,16 @@ export interface AudioPlayerPlugin {
   destroy(params: { audioId: string }): Promise<void>;
 
   /**
+   * Remove a single audio source from the playlist.
+   */
+  removeAudioSource(params: { audioId: string }): Promise<void>;
+
+  /**
+   * Remove multiple audio sources from the playlist.
+   */
+  removeAudioSources(params: { audioIds: string[] }): Promise<void>;
+
+  /**
    * Get details about the currently active audio source.
    */
   getCurrentAudio(): Promise<CurrentAudio>;

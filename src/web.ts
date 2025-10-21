@@ -59,6 +59,16 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
     throw this.unimplemented('destroy is not implemented on web.');
   }
 
+  removeAudioSource(): Promise<void> {
+    console.warn('removeAudioSource is not implemented on web.');
+    return Promise.resolve();
+  }
+
+  removeAudioSources(): Promise<void> {
+    console.warn('removeAudioSources is not implemented on web.');
+    return Promise.resolve();
+  }
+
   onAppGainsFocus(): Promise<void> {
     throw this.unimplemented('onAppGainsFocus is not implemented on web.');
   }

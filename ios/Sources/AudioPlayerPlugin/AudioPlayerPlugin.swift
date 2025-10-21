@@ -230,6 +230,30 @@ public class AudioPlayerPlugin: CAPPlugin {
         }
     }
 
+    @objc func removeAudioSource(_ call: CAPPluginCall) {
+        do {
+            let audioId = try audioId(call)
+            try audioManager.removeAudioSource(withId: audioId)
+            call.resolve(["message": "Audio source removed successfully"])
+        } catch {
+            call.reject("Failed to remove audio source: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func removeAudioSources(_ call: CAPPluginCall) {
+        guard let audioIds = call.getArray("audioIds", String.self) else {
+            call.reject("Invalid or missing audio IDs")
+            return
+        }
+
+        do {
+            try audioManager.removeAudioSources(withIds: audioIds)
+            call.resolve(["message": "Audio sources removed successfully", "count": audioIds.count])
+        } catch {
+            call.reject("Failed to remove audio sources: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Configure Remote Commands
 
     private func configuredCallbacks() {

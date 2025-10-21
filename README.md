@@ -105,6 +105,8 @@ A PNG is recommended with the size of 1024 x 1024px. The same image can be used 
 * [`setRate(...)`](#setrate)
 * [`isPlaying(...)`](#isplaying)
 * [`destroy(...)`](#destroy)
+* [`removeAudioSource(...)`](#removeaudiosource)
+* [`removeAudioSources(...)`](#removeaudiosources)
 * [`getCurrentAudio()`](#getcurrentaudio)
 * [`onAudioReady(...)`](#onaudioready)
 * [`onAudioEnd(...)`](#onaudioend)
@@ -344,6 +346,36 @@ Destroy all resources associated with the audio source.
 | Param        | Type                              |
 | ------------ | --------------------------------- |
 | **`params`** | <code>{ audioId: string; }</code> |
+
+--------------------
+
+
+### removeAudioSource(...)
+
+```typescript
+removeAudioSource(params: { audioId: string; }) => Promise<void>
+```
+
+Remove a single audio source from the playlist.
+
+| Param        | Type                              |
+| ------------ | --------------------------------- |
+| **`params`** | <code>{ audioId: string; }</code> |
+
+--------------------
+
+
+### removeAudioSources(...)
+
+```typescript
+removeAudioSources(params: { audioIds: string[]; }) => Promise<void>
+```
+
+Remove multiple audio sources from the playlist.
+
+| Param        | Type                                 |
+| ------------ | ------------------------------------ |
+| **`params`** | <code>{ audioIds: string[]; }</code> |
 
 --------------------
 

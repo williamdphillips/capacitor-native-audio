@@ -393,6 +393,89 @@ public class AudioPlayerPlugin extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void removeAudioSource(PluginCall call) {
+        try {
+            String audioId = audioId(call);
+            
+            if (!audioSources.exists(audioId)) {
+                call.reject("Audio source with ID " + audioId + " not found");
+                return;
+            }
+
+            AudioSource audioSource = audioSources.get(audioId);
+
+            // Don't allow removing the notification audio source
+            if (audioSource.useForNotification) {
+                call.reject("Cannot remove the notification audio source");
+                return;
+            }
+
+            postToLooper("removeAudioSource", call, () -> {
+                boolean removed = audioSources.remove(audioId);
+                
+                if (removed) {
+                    JSObject result = new JSObject();
+                    result.put("message", "Audio source removed successfully");
+                    call.resolve(result);
+                } else {
+                    call.reject("Failed to remove audio source");
+                }
+            });
+        } catch (Exception ex) {
+            call.reject("There was an issue removing the audio source.", ex);
+        }
+    }
+
+    @PluginMethod
+    public void removeAudioSources(PluginCall call) {
+        try {
+            org.json.JSONArray audioIdsArray = call.getArray("audioIds");
+            
+            if (audioIdsArray == null || audioIdsArray.length() == 0) {
+                call.reject("Invalid or missing audio IDs");
+                return;
+            }
+
+            postToLooper("removeAudioSources", call, () -> {
+                int removedCount = 0;
+                
+                for (int i = 0; i < audioIdsArray.length(); i++) {
+                    try {
+                        String audioId = audioIdsArray.getString(i);
+                        
+                        if (!audioSources.exists(audioId)) {
+                            Log.w(TAG, "Audio source " + audioId + " not found, skipping");
+                            continue;
+                        }
+
+                        AudioSource audioSource = audioSources.get(audioId);
+                        
+                        // Skip notification audio source
+                        if (audioSource.useForNotification) {
+                            Log.w(TAG, "Skipping notification audio source: " + audioId);
+                            continue;
+                        }
+
+                        boolean removed = audioSources.remove(audioId);
+                        if (removed) {
+                            removedCount++;
+                        }
+                    } catch (Exception ex) {
+                        Log.e(TAG, "Error removing audio source at index " + i, ex);
+                    }
+                }
+
+                JSObject result = new JSObject();
+                result.put("message", "Audio sources removed successfully");
+                result.put("count", removedCount);
+                call.resolve(result);
+            });
+        } catch (Exception ex) {
+            call.reject("There was an issue removing audio sources.", ex);
+        }
+    }
+
     @PluginMethod(returnType = PluginMethod.RETURN_CALLBACK)
     public void onAppGainsFocus(PluginCall call) {
         call.setKeepAlive(true);
