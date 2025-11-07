@@ -390,24 +390,10 @@ public class AudioManager {
         // Set metadata fields
         nowPlayingInfo[MPMediaItemPropertyTitle] = audioSource.title
         nowPlayingInfo[MPMediaItemPropertyArtist] = audioSource.artist
-        nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = audioSource.albumTitle
-
-        // Fetch and set artwork if available
-        if let artworkSource = audioSource.artworkSource {
-            fetchArtwork(from: artworkSource) { artwork in
-                if let artwork = artwork {
-                    nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
-                    DispatchQueue.main.async {
-                        nowPlayingInfoCenter.nowPlayingInfo = nowPlayingInfo
-                        print("Now playing info updated with artwork")
-                    }
-                }
-            }
-        } else {
-            print("No artwork available, setting now playing info without artwork")
-            DispatchQueue.main.async {
-                nowPlayingInfoCenter.nowPlayingInfo = nowPlayingInfo
-            }
+        
+        // Only set albumTitle if it exists and is not empty
+        if let albumTitle = audioSource.albumTitle, !albumTitle.isEmpty {
+            nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = albumTitle
         }
 
         // Set playback duration and elapsed time
@@ -415,13 +401,26 @@ public class AudioManager {
         nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = self.getCurrentTime()
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 1
 
-        // Update Now Playing Info
-        DispatchQueue.main.async {
-            nowPlayingInfoCenter.nowPlayingInfo = nowPlayingInfo
-            print("Now playing info updated: \(nowPlayingInfo)")
+        // Fetch and set artwork if available
+        if let artworkSource = audioSource.artworkSource, !artworkSource.isEmpty {
+            fetchArtwork(from: artworkSource) { [weak self] artwork in
+                guard let self = self else { return }
+                var finalNowPlayingInfo = nowPlayingInfo
+                if let artwork = artwork {
+                    finalNowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
+                }
+                DispatchQueue.main.async {
+                    nowPlayingInfoCenter.nowPlayingInfo = finalNowPlayingInfo
+                    print("Now playing info updated: \(finalNowPlayingInfo)")
+                }
+            }
+        } else {
+            // No artwork, set now playing info immediately
+            DispatchQueue.main.async {
+                nowPlayingInfoCenter.nowPlayingInfo = nowPlayingInfo
+                print("Now playing info updated: \(nowPlayingInfo)")
+            }
         }
-
-        nowPlayingInfoCenter.nowPlayingInfo = nowPlayingInfo
     }
 
     private func fetchArtwork(
