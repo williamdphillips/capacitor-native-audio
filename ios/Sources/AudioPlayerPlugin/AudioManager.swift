@@ -18,6 +18,7 @@ public class AudioManager {
     var onPlayPrevious: (() -> Void)?
     var onSeek: ((Double) -> Void)?
     var onAirPlayActiveChange: ((Bool) -> Void)?
+    var onPlaybackError: ((String, String) -> Void)?  // audioId, error message
 
     init() {
         configureAudioSession()
@@ -164,7 +165,28 @@ public class AudioManager {
         // If the currently playing item doesn't match the specified source, find the matching source in the playlist
         if let matchingSource = audioSources.first(where: { $0.audioId == source.audioId }) {
             guard let url = URL(string: matchingSource.source) else {
+                let errorMsg = "Invalid URL: \(matchingSource.source)"
+                print("❌ \(errorMsg)")
+                onPlaybackError?(matchingSource.audioId, errorMsg)
+                AudioManager.eventEmitter.emit(
+                    event: "playbackError",
+                    data: ["audioId": matchingSource.audioId, "error": errorMsg])
                 throw AudioPlayerError.invalidPath
+            }
+
+            // Validate file URLs exist
+            if url.isFileURL {
+                let filePath = url.path
+                let fileManager = FileManager.default
+                if !fileManager.fileExists(atPath: filePath) {
+                    let errorMsg = "File not found: \(filePath)"
+                    print("❌ \(errorMsg)")
+                    onPlaybackError?(matchingSource.audioId, errorMsg)
+                    AudioManager.eventEmitter.emit(
+                        event: "playbackError",
+                        data: ["audioId": matchingSource.audioId, "error": errorMsg])
+                    throw AudioPlayerError.runtimeError(errorMsg)
+                }
             }
 
             let playerItem = AVPlayerItem(url: url)
@@ -175,10 +197,42 @@ public class AudioManager {
                 [weak self] item, _ in
                 guard let self = self else { return }
                 if item.status == .readyToPlay {
-                    print("Player item is ready to play")
+                    print("✅ Player item is ready to play")
                     self.updateNowPlayingInfo()
                 } else if item.status == .failed {
-                    print("Failed to load player item: \(String(describing: item.error))")
+                    let errorMsg = item.error?.localizedDescription ?? "Unknown error loading audio file"
+                    print("❌ Failed to load player item: \(errorMsg)")
+                    if let error = item.error {
+                        print("Error details: \(error)")
+                    }
+                    
+                    // Emit error event
+                    self.onPlaybackError?(matchingSource.audioId, errorMsg)
+                    AudioManager.eventEmitter.emit(
+                        event: "playbackError",
+                        data: ["audioId": matchingSource.audioId, "error": errorMsg])
+                    
+                    // Stop playback and clear the failed item
+                    self.audioPlayer.pause()
+                    self.audioPlayer.replaceCurrentItem(with: nil)
+                    self.onPlaybackStatusChange?(false)
+                    AudioManager.eventEmitter.emit(
+                        event: "playbackStatusChange",
+                        data: ["audioId": matchingSource.audioId, "isPlaying": false])
+                    
+                    // Try to skip to next track if available
+                    let nextIndex = self.currentIndex + 1
+                    if nextIndex < self.audioSources.count {
+                        print("🔄 Attempting to skip to next track")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            let nextSource = self.audioSources[nextIndex]
+                            do {
+                                try self.play(nextSource)
+                            } catch {
+                                print("❌ Failed to play next track: \(error)")
+                            }
+                        }
+                    }
                 }
             }
 
@@ -331,20 +385,43 @@ public class AudioManager {
             return duration.isNumeric ? CMTimeGetSeconds(duration) : 0.0
         }
 
-        // Wait for the player item to become ready
+        // If already failed, return 0.0 immediately
+        if currentItem.status == .failed {
+            print("❌ Player item failed to load, cannot get duration")
+            if let error = currentItem.error {
+                print("Error details: \(error.localizedDescription)")
+            }
+            return 0.0
+        }
+
+        // Wait for the player item to become ready with timeout
         let semaphore = DispatchSemaphore(value: 0)
         var duration: Double = 0.0
+        var observer: NSKeyValueObservation?
 
-        let observer = currentItem.observe(\.status, options: [.new]) { item, _ in
+        observer = currentItem.observe(\.status, options: [.new]) { item, _ in
             if item.status == .readyToPlay {
                 let itemDuration = item.asset.duration
                 duration = itemDuration.isNumeric ? CMTimeGetSeconds(itemDuration) : 0.0
                 semaphore.signal()
+            } else if item.status == .failed {
+                print("❌ Player item failed while waiting for duration")
+                if let error = item.error {
+                    print("Error details: \(error.localizedDescription)")
+                }
+                semaphore.signal()  // Signal to unblock, return 0.0
             }
         }
 
-        semaphore.wait()  // Blocks the current thread
-        observer.invalidate()  // Clean up the observer
+        // Wait with 10 second timeout
+        let timeoutResult = semaphore.wait(timeout: .now() + 10.0)
+        observer?.invalidate()  // Clean up the observer
+        
+        if timeoutResult == .timedOut {
+            print("❌ Timeout waiting for player item to become ready (getCurrentDuration)")
+            return 0.0
+        }
+        
         return duration
     }
 
@@ -359,20 +436,43 @@ public class AudioManager {
             return currentTime.isNumeric ? CMTimeGetSeconds(currentTime) : 0.0
         }
 
-        // Wait for the player item to become ready
+        // If already failed, return 0.0 immediately
+        if currentItem.status == .failed {
+            print("❌ Player item failed to load, cannot get current time")
+            if let error = currentItem.error {
+                print("Error details: \(error.localizedDescription)")
+            }
+            return 0.0
+        }
+
+        // Wait for the player item to become ready with timeout
         let semaphore = DispatchSemaphore(value: 0)
         var time: Double = 0.0
+        var observer: NSKeyValueObservation?
 
-        let observer = currentItem.observe(\.status, options: [.new]) { item, _ in
+        observer = currentItem.observe(\.status, options: [.new]) { item, _ in
             if item.status == .readyToPlay {
                 let itemTime = self.audioPlayer.currentTime()
                 time = itemTime.isNumeric ? CMTimeGetSeconds(itemTime) : 0.0
                 semaphore.signal()
+            } else if item.status == .failed {
+                print("❌ Player item failed while waiting for current time")
+                if let error = item.error {
+                    print("Error details: \(error.localizedDescription)")
+                }
+                semaphore.signal()  // Signal to unblock, return 0.0
             }
         }
 
-        semaphore.wait()  // Blocks the current thread
-        observer.invalidate()  // Clean up the observer
+        // Wait with 10 second timeout
+        let timeoutResult = semaphore.wait(timeout: .now() + 10.0)
+        observer?.invalidate()  // Clean up the observer
+        
+        if timeoutResult == .timedOut {
+            print("❌ Timeout waiting for player item to become ready (getCurrentTime)")
+            return 0.0
+        }
+        
         return time
     }
 

@@ -289,6 +289,11 @@ public class AudioPlayerPlugin: CAPPlugin {
             print("Native onAirPlayEnabled should be triggered with state: \(isEnabled)")
             self.notifyListeners("onAirPlayEnabled", data: ["isEnabled": isEnabled])
         }
+
+        audioManager.onPlaybackError = { audioId, error in
+            print("Native onPlaybackError should be triggered: \(error)")
+            self.notifyListeners("onPlaybackError", data: ["audioId": audioId, "error": error])
+        }
     }
 
     @objc func handleAppToBackground() {

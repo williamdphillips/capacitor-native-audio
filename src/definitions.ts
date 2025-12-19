@@ -226,7 +226,7 @@ export interface AudioPlayerPlugin {
    * Add listeners for events
    */
   addListener(
-    eventName: 'onPlayNext' | 'onPlayPrevious' | 'onSeek' | 'onPlaybackStatusChange' | 'onAudioEnd' | 'onAirPlayEnabled',
+    eventName: 'onPlayNext' | 'onPlayPrevious' | 'onSeek' | 'onPlaybackStatusChange' | 'onAudioEnd' | 'onAirPlayEnabled' | 'onPlaybackError',
     listenerFunc: (data: any) => void
   ): Promise<PluginListenerHandle>;
 
