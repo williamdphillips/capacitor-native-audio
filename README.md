@@ -114,7 +114,7 @@ A PNG is recommended with the size of 1024 x 1024px. The same image can be used 
 * [`onPlayNext(...)`](#onplaynext)
 * [`onPlayPrevious(...)`](#onplayprevious)
 * [`onSeek(...)`](#onseek)
-* [`addListener('onPlayNext' | 'onPlayPrevious' | 'onSeek' | 'onPlaybackStatusChange' | 'onAudioEnd' | 'onAirPlayEnabled', ...)`](#addlisteneronplaynext--onplayprevious--onseek--onplaybackstatuschange--onaudioend--onairplayenabled-)
+* [`addListener('onPlayNext' | 'onPlayPrevious' | 'onSeek' | 'onPlaybackStatusChange' | 'onAudioEnd' | 'onAirPlayEnabled' | 'onPlaybackError', ...)`](#addlisteneronplaynext--onplayprevious--onseek--onplaybackstatuschange--onaudioend--onairplayenabled--onplaybackerror-)
 * [`setAudioSources(...)`](#setaudiosources)
 * [`showAirPlayMenu()`](#showairplaymenu)
 * [Interfaces](#interfaces)
@@ -497,18 +497,18 @@ Register a callback for seek events.
 --------------------
 
 
-### addListener('onPlayNext' | 'onPlayPrevious' | 'onSeek' | 'onPlaybackStatusChange' | 'onAudioEnd' | 'onAirPlayEnabled', ...)
+### addListener('onPlayNext' | 'onPlayPrevious' | 'onSeek' | 'onPlaybackStatusChange' | 'onAudioEnd' | 'onAirPlayEnabled' | 'onPlaybackError', ...)
 
 ```typescript
-addListener(eventName: 'onPlayNext' | 'onPlayPrevious' | 'onSeek' | 'onPlaybackStatusChange' | 'onAudioEnd' | 'onAirPlayEnabled', listenerFunc: (data: any) => void) => Promise<PluginListenerHandle>
+addListener(eventName: 'onPlayNext' | 'onPlayPrevious' | 'onSeek' | 'onPlaybackStatusChange' | 'onAudioEnd' | 'onAirPlayEnabled' | 'onPlaybackError', listenerFunc: (data: any) => void) => Promise<PluginListenerHandle>
 ```
 
 Add listeners for events
 
-| Param              | Type                                                                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| **`eventName`**    | <code>'onPlayNext' \| 'onPlayPrevious' \| 'onSeek' \| 'onPlaybackStatusChange' \| 'onAudioEnd' \| 'onAirPlayEnabled'</code> |
-| **`listenerFunc`** | <code>(data: any) =&gt; void</code>                                                                                         |
+| Param              | Type                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`eventName`**    | <code>'onPlayNext' \| 'onPlayPrevious' \| 'onSeek' \| 'onPlaybackStatusChange' \| 'onAudioEnd' \| 'onAirPlayEnabled' \| 'onPlaybackError'</code> |
+| **`listenerFunc`** | <code>(data: any) =&gt; void</code>                                                                                                              |
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
