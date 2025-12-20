@@ -220,19 +220,8 @@ public class AudioManager {
                         event: "playbackStatusChange",
                         data: ["audioId": matchingSource.audioId, "isPlaying": false])
                     
-                    // Try to skip to next track if available
-                    let nextIndex = self.currentIndex + 1
-                    if nextIndex < self.audioSources.count {
-                        print("🔄 Attempting to skip to next track")
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            let nextSource = self.audioSources[nextIndex]
-                            do {
-                                try self.play(nextSource)
-                            } catch {
-                                print("❌ Failed to play next track: \(error)")
-                            }
-                        }
-                    }
+                    // Note: Don't automatically skip to next track here
+                    // Let the TypeScript layer handle errors and decide when to skip
                 }
             }
 
