@@ -147,8 +147,8 @@ public class AudioSource extends Binder {
         getPlayer().pause();
     }
 
-    public void seek(long timeInSeconds) {
-        getPlayer().seekTo(timeInSeconds * 1000);
+    public void seek(double timeInSeconds) {
+        getPlayer().seekTo((long) (timeInSeconds * 1000));
     }
 
     public void stop() {

@@ -121,11 +121,11 @@ public class AudioPlayerPlugin: CAPPlugin {
 
     @objc func seek(_ call: CAPPluginCall) {
         do {
-            guard let timeInSeconds = call.getInt("timeInSeconds") else {
+            guard let timeInSeconds = call.getDouble("timeInSeconds") else {
                 throw AudioPlayerError.invalidSeekTime
             }
 
-            try audioManager.seek(to: Double(timeInSeconds))
+            try audioManager.seek(to: timeInSeconds)
             call.resolve()
         } catch {
             call.reject("There was an issue seeking the audio", nil, error)
