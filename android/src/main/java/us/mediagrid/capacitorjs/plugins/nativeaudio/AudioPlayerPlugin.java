@@ -282,7 +282,7 @@ public class AudioPlayerPlugin extends Plugin {
             }
 
             postToLooper("seek", call, () -> {
-                audioSources.get(audioId(call)).seek(call.getInt("timeInSeconds"));
+                audioSources.get(audioId(call)).seek(call.getDouble("timeInSeconds"));
 
                 call.resolve();
             });
