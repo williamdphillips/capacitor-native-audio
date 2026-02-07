@@ -29,8 +29,9 @@ public class AudioManager {
     // MARK: - Audio Source Management
 
     func addAudioSource(_ source: AudioSource) throws {
-        guard !audioSources.contains(where: { $0.audioId == source.audioId }) else {
-            throw AudioPlayerError.runtimeError("Audio source with the same ID already exists")
+        if audioSources.contains(where: { $0.audioId == source.audioId }) {
+            print("Skipping add: audio source \(source.audioId) already exists")
+            return
         }
         print("Appended \(source.audioId)")
         audioSources.append(source)
