@@ -366,18 +366,20 @@ public class PlaylistAudioManager {
         if (player == null) {
             return 0;
         }
-        return player.getCurrentPosition() / 1000.0;
+        return runOnMainForResult(() -> player.getCurrentPosition() / 1000.0, 0.0);
     }
 
     public double getDuration() {
         if (player == null) {
             return 0;
         }
-        long duration = player.getDuration();
-        if (duration < 0) {
-            return 0;
-        }
-        return duration / 1000.0;
+        return runOnMainForResult(() -> {
+            long duration = player.getDuration();
+            if (duration < 0) {
+                return 0.0;
+            }
+            return duration / 1000.0;
+        }, 0.0);
     }
 
     @Nullable
@@ -428,6 +430,47 @@ public class PlaylistAudioManager {
         } else {
             mainHandler.post(r);
         }
+    }
+
+    private interface ResultSupplier<T> {
+        T get() throws Exception;
+    }
+
+    private <T> T runOnMainForResult(ResultSupplier<T> supplier, T fallback) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            try {
+                return supplier.get();
+            } catch (Exception e) {
+                Log.e(TAG, "Main-thread player read failed", e);
+                return fallback;
+            }
+        }
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<T> result = new AtomicReference<>(fallback);
+        AtomicReference<Exception> error = new AtomicReference<>();
+        mainHandler.post(() -> {
+            try {
+                result.set(supplier.get());
+            } catch (Exception e) {
+                error.set(e);
+            } finally {
+                latch.countDown();
+            }
+        });
+        try {
+            if (!latch.await(2, TimeUnit.SECONDS)) {
+                Log.w(TAG, "Timed out waiting for main-thread player read");
+                return fallback;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return fallback;
+        }
+        if (error.get() != null) {
+            Log.e(TAG, "Main-thread player read failed", error.get());
+            return fallback;
+        }
+        return result.get();
     }
 
     private interface ThrowingRunnable {
