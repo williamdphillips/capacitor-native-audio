@@ -1,50 +1,50 @@
 package us.mediagrid.capacitorjs.plugins.nativeaudio;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Intent;
-import android.os.IBinder;
+import android.os.Build;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
-import androidx.media3.common.AudioAttributes;
-import androidx.media3.common.C;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.session.DefaultMediaNotificationProvider;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
 
+/**
+ * Foreground MediaSessionService so lock-screen / notification / BT media controls work.
+ */
 public class AudioPlayerService extends MediaSessionService {
 
     private static final String TAG = "AudioPlayerService";
-    public static final String PLAYBACK_CHANNEL_ID = "playback_channel";
-    private MediaSession mediaSession = null;
+    public static final String PLAYBACK_CHANNEL_ID = "wave_playback_channel";
+
+    private MediaSession mediaSession;
 
     @Override
+    @OptIn(markerClass = UnstableApi.class)
     public void onCreate() {
         Log.i(TAG, "Service being created");
         super.onCreate();
+        createNotificationChannel();
 
-        ExoPlayer player = new ExoPlayer.Builder(this)
-            .setAudioAttributes(
-                new AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
-                    .build(),
-                true
-            )
-            .setWakeMode(C.WAKE_MODE_NETWORK)
-            .build();
-        player.setPlayWhenReady(false);
-        mediaSession = new MediaSession.Builder(this, player)
-            .setCallback(new MediaSessionCallback(this))
-            .build();
+        setMediaNotificationProvider(
+            new DefaultMediaNotificationProvider.Builder(this)
+                .setChannelId(PLAYBACK_CHANNEL_ID)
+                .build()
+        );
+
+        PlaylistAudioManager manager = PlaylistAudioManager.getInstance(this);
+        manager.onServiceCreated(this);
+        mediaSession = manager.getMediaSession();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "Service starting");
-
         return super.onStartCommand(intent, flags, startId);
     }
 
@@ -56,50 +56,37 @@ public class AudioPlayerService extends MediaSessionService {
     @Override
     public void onTaskRemoved(@Nullable Intent rootIntent) {
         Log.i(TAG, "Task removed");
-
-        AudioSources audioSources = getAudioSourcesFromMediaSession();
-
-        if (audioSources != null) {
-            Log.i(TAG, "Destroying all non-notification audio sources");
-            audioSources.destroyAllNonNotificationSources();
+        if (mediaSession != null) {
+            Player player = mediaSession.getPlayer();
+            if (player.getPlayWhenReady()) {
+                player.pause();
+            }
         }
-
-        Player player = mediaSession.getPlayer();
-
-        // Make sure the service is not in foreground
-        if (player.getPlayWhenReady()) {
-            player.pause();
-        }
-
         stopSelf();
     }
 
     @Override
     public void onDestroy() {
         Log.i(TAG, "Service being destroyed");
-
-        AudioSources audioSources = getAudioSourcesFromMediaSession();
-
-        if (audioSources != null) {
-            Log.i(TAG, "Destroying all non-notification audio sources");
-            audioSources.destroyAllNonNotificationSources();
-        }
-
-        mediaSession.getPlayer().release();
-        mediaSession.release();
+        PlaylistAudioManager.getInstance(this).onServiceDestroyed();
         mediaSession = null;
-
         super.onDestroy();
     }
 
-    @OptIn(markerClass = UnstableApi.class)
-    private AudioSources getAudioSourcesFromMediaSession() {
-        IBinder sourcesBinder = mediaSession.getSessionExtras().getBinder("audioSources");
-
-        if (sourcesBinder != null) {
-            return (AudioSources) sourcesBinder;
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
         }
-
-        return null;
+        NotificationChannel channel = new NotificationChannel(
+            PLAYBACK_CHANNEL_ID,
+            "Wave Playback",
+            NotificationManager.IMPORTANCE_LOW
+        );
+        channel.setDescription("Now playing controls");
+        channel.setShowBadge(false);
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.createNotificationChannel(channel);
+        }
     }
 }
