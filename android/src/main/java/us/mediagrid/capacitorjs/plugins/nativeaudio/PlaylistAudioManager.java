@@ -210,16 +210,43 @@ public class PlaylistAudioManager {
     }
 
     public void setAudioSources(List<AudioSourceItem> sources) {
+        String playingId = getCurrentAudioId();
+        if (playingId == null && player != null && player.getMediaItemCount() > 0) {
+            MediaItem current = player.getCurrentMediaItem();
+            if (current != null && current.mediaId != null && !current.mediaId.isEmpty()) {
+                playingId = current.mediaId;
+            }
+        }
+
         audioSources.clear();
         if (sources != null) {
             audioSources.addAll(sources);
         }
-        currentIndex = -1;
-        Log.d(TAG, "setAudioSources: " + audioSources.size() + " tracks");
+
+        if (playingId != null) {
+            currentIndex = indexOf(playingId);
+        } else {
+            currentIndex = -1;
+        }
+        Log.d(TAG, "setAudioSources: " + audioSources.size() + " tracks, currentIndex=" + currentIndex);
     }
 
+    /** Match iOS: append sources without clearing the current playlist / index. */
     public void createMultiple(List<AudioSourceItem> sources) {
-        setAudioSources(sources);
+        if (sources == null || sources.isEmpty()) {
+            return;
+        }
+        int added = 0;
+        for (AudioSourceItem source : sources) {
+            if (indexOf(source.audioId) >= 0) {
+                Log.d(TAG, "Skipping add: audio source " + source.audioId + " already exists");
+                continue;
+            }
+            audioSources.add(source);
+            added++;
+        }
+        Log.d(TAG, "createMultiple: added " + added + " sources, total=" + audioSources.size()
+            + ", currentIndex=" + currentIndex);
     }
 
     public void removeAudioSources(List<String> audioIds) {
@@ -227,11 +254,22 @@ public class PlaylistAudioManager {
             return;
         }
         String currentId = getCurrentAudioId();
-        audioSources.removeIf(s -> audioIds.contains(s.audioId));
-        if (currentId != null && audioIds.contains(currentId)) {
-            stop();
-            currentIndex = -1;
-        } else if (currentId != null) {
+        for (String audioId : audioIds) {
+            if (currentId != null && currentId.equals(audioId)) {
+                // Match iOS: never remove the currently playing track
+                Log.d(TAG, "Skipping removal of currently playing audio source: " + audioId);
+                continue;
+            }
+            int index = indexOf(audioId);
+            if (index < 0) {
+                continue;
+            }
+            audioSources.remove(index);
+            if (currentIndex > index) {
+                currentIndex--;
+            }
+        }
+        if (currentId != null) {
             currentIndex = indexOf(currentId);
         }
     }
@@ -246,12 +284,17 @@ public class PlaylistAudioManager {
             throw new Exception("Player not ready");
         }
 
+        // Resume current item (JS togglePlayPause calls play() with no audioId)
         if (audioId == null || audioId.isEmpty()) {
             if (player.isPlaying()) {
                 return;
             }
-            if (currentIndex >= 0 && currentIndex < audioSources.size()) {
+            if (player.getMediaItemCount() > 0) {
                 player.play();
+                return;
+            }
+            if (currentIndex >= 0 && currentIndex < audioSources.size()) {
+                playAtIndex(currentIndex);
                 return;
             }
             if (!audioSources.isEmpty()) {
@@ -266,7 +309,13 @@ public class PlaylistAudioManager {
             throw new Exception("Audio source not found: " + audioId);
         }
 
-        if (index == currentIndex && player.getMediaItemCount() > 0) {
+        MediaItem currentItem = player.getCurrentMediaItem();
+        boolean sameItemLoaded = currentItem != null
+            && audioId.equals(currentItem.mediaId)
+            && player.getMediaItemCount() > 0;
+
+        if (sameItemLoaded || (index == currentIndex && player.getMediaItemCount() > 0)) {
+            currentIndex = index;
             if (!player.isPlaying()) {
                 player.play();
             }
